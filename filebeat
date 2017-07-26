@@ -1,0 +1,35 @@
+为什么使用filebeat而不使用fluentd？
+Fluentd必须通过写正则表达式来规范所搜集日志的格式。对于存在多种应用的日志系统而言，fluentd如果每次都需要指定日志格式，没有通用的做法。
+Filebeat可以将文件中每一行信息作为一条日志的message，再加上fields等方式来显示应用，通用性非常高。
+
+为什么在主机上启动filebeat而不是通过容器化方式？
+如果容器重建，则会重复读取原有数据，造成数据重复。因为filebeat是根据创建的时间戳来确定唯一性的。虽然可以将日志记录文件共享出来，避免这个问题，但结构会变得复杂。
+Filebeat容器会使用filebeat用户来进行操作，由于没有root权限，无法对文件进行读取。新生成文件权限不正确。如果每次需要对新生成文件修改读写权限，操作上会增加复杂程度。
+在elasticseaerch种所记录的hostname会变成容器名，而容器名只是filebeat的容器名，并不是应用的容器名。容器可能会变化，因此这个字段也会变化，但这个字段没有意义。
+
+日志主机是一台挂载了共享存储的主机.
+在日志主机上安装filebeat.
+
+安装
+yum install filebeat
+
+配置文件
+#vi /etc/filebeat
+filebeat:
+  prospectors:
+    - paths:
+        - /opt/cephfs/projA/pods/*.*
+      input_type: log
+      fields:
+        porject: tomcat
+
+#    - paths:
+#        - /opt/tomcatlog/*.log
+#      input_type: log
+#      tags: ['type-B']
+#      fields:
+#        app: another
+
+output:
+  elasticsearch:
+    hosts: ["10.236.16.6:9200"]
