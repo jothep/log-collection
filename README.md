@@ -7,3 +7,19 @@ use k8s shellscript filebeat to collect logs
 
 docker build command:
 docker build -t jasko/log-collect:0.1 -f Dockerfile .
+
+共享存储目录 /opt/cephfs/projA
+日志共享暂存目录 
+name: logvol 
+original: /usr/local/tomcat/logs 
+target: 通过变量LOG_LOCATION实现,在挂载目录种仍需要填写
+日志搜集器变量:
+env:
+        - name: LOG_LOCATION #日志路径,与logvol一致
+          value: /opt/logs
+        - name: INTERVAL  #时间间隔
+          value: 5
+		- name: LOGOPT #rsync参数
+          value: -a
+查看日志搜集容器运行状态
+kubectl logs -f $PODNAME -c logcollector
