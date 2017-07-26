@@ -4,9 +4,9 @@
 # $HOSTNAME: podname ; $LOGOPT: rsync options ; $LOG_LOCATION: original log path ; $INTERVAL: sync per every time
 
 #!/bin/bash
-mkdir -p /mnt/$HOSTNAME
+mkdir -p /mnt/pods/$HOSTNAME
 while true; do
-  rsync $LOGOPT $LOG_LOCATION /mnt/$HOSTNAME
+  rsync $LOGOPT $LOG_LOCATION /mnt/pods/$HOSTNAME
   T=$(date)
   echo $T " [log collected]"
   sleep $INTERVAL
