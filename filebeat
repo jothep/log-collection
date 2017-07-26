@@ -18,10 +18,10 @@ yum install filebeat
 filebeat:
   prospectors:
     - paths:
-        - /opt/cephfs/projA/pods/*.*
+        - /opt/cephfs/projA/pods/*/logs/*.*
       input_type: log
       fields:
-        porject: tomcat
+        porject: projA-tomcat
 
 #    - paths:
 #        - /opt/tomcatlog/*.log
@@ -32,4 +32,16 @@ filebeat:
 
 output:
   elasticsearch:
-    hosts: ["10.236.16.6:9200"]
+    hosts: ["172.16.7.56:30092"]
+
+解释:
+路径中一次只能用一个/*/表示一层目录,可以用两个如/*/*/表示两层目录,但不能用/**/表示多层目录
+
+filebeat的日志记录文件默认在/.filebeat 
+如果要重置filebeat的统计数据,
+1.停止filebeat服务
+2.删除本机的/.filebeat
+3.删除elasticseaerch中的index,例如curl -XDELETE 'http://10.236.16.6:9200/filebeat-2017.07.26'
+
+查询elasticseaerch上有新建索引,则创建成功
+# curl '10.236.16.6:9200/_cat/indices?v'
