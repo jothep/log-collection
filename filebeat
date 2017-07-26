@@ -35,7 +35,10 @@ output:
     hosts: ["172.16.7.56:30092"]
 
 解释:
-路径中一次只能用一个/*/表示一层目录,可以用两个如/*/*/表示两层目录,但不能用/**/表示多层目录
+1.路径中一次只能用一个/*/表示一层目录,可以用两个如/*/*/表示两层目录,但不能用/**/表示多层目录
+2.path支持变量,原文如下:
+You can also create a shared variable to point to the root path, so your config might look like:
+['${fb.watch.path}//', '${fb.watch.path}///', '${fb.watch.path}////*']
 
 filebeat的日志记录文件默认在/.filebeat 
 如果要重置filebeat的统计数据,
