@@ -24,6 +24,8 @@ do
   if [ -f "$myFile" ] && grep -q "docker://" /cid.txt
   then  
     break
+  else
+    python gethn.py
   fi    
 done
 echo "ok"
