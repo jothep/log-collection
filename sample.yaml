@@ -39,7 +39,7 @@ spec:
           value: /opt/logs
         - name: INTERVAL
           value: "5"
-		- name: LOGOPT
+	- name: LOGOPT
           value: "-a"
         volumeMounts:
         - name: logvol
