@@ -1,0 +1,130 @@
+##通过定义yaml脚本,与应用同时启动日志搜集容器
+以下yaml脚本为使用示例:
+
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  labels:
+    run: tomcat
+  name: tomcat
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      run: tomcat
+  template:
+    metadata:
+      labels:
+        run: tomcat
+    spec:
+      containers:
+      - image: tomcat:test
+        imagePullPolicy: IfNotPresent
+        name: tomcat
+        command:
+        - /usr/local/tomcat/bin/catalina.sh
+        - run
+        ports:
+          - containerPort: 8080
+            name: "htps"
+        volumeMounts:
+        - name: logvol
+          mountPath: /usr/local/tomcat/logs
+        - name: stormount
+          mountPath: /mnt
+      - name: logcollector
+        image: jasko/log-collect:0.5
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: LOG_LOCATION
+          value: /opt/logs
+        - name: INTERVAL
+          value: "5"
+        - name: LOGOPT
+          value: "-r"
+        volumeMounts:
+        - name: logvol
+          mountPath: /opt/logs
+        - name: stormount
+          mountPath: /mnt
+      volumes:
+      - name: logvol
+        emptyDir: {}
+      - name: stormount
+        hostPath:
+          path: /opt/cephfs/projA
+
+在应用的磁盘挂载部分,有两个挂载目录,分别是logvol与stormount
+logvol在应用容器内指向'应用日志的存放路径',使用emptyDir方式与logcollector容器共享.当pod关闭后,这部分数据会删除掉不占空间,但已经将数据存放在共享存储上了.
+stormount用来将同步后的日志存放在共享存储上.
+
+在日志搜集容器中,将应用日志挂载到/opt/logs目录下.日志搜集容器会使用脚本来进行日志同步,详见下面部分解释.
+变量使用:
+LOG_LOCATION  指定应用日志所存放路径
+INTERVAL	  对应用日志进行时间同步的时间间隔
+LOGOPT		  使用rsync进行日志同步时的参数
+yaml脚本示例中将日志复制到日志搜集容器/mnt中所对应应用目录中
+
+##日志搜集容器镜像构成
+日志搜集容器基于centos镜像,里面装有python,以及数据同步软件rsync,并且有一个脚本log-collect.sh在启动时执行.
+
+FROM jasko/centos
+MAINTAINER Jasko version: 0.1
+COPY log-collect.sh /
+RUN yum install -y rsync && chmod +x log-collect.sh
+CMD ["bash", "/log-collect.sh"]
+
+##日志搜集启动脚本
+日志搜集脚本会执行一个python脚本,以获取应用容器的UUID,并用UUID的前12位为名来创建目录.这个目录用来区分应用的不同pod副本的日志,也会在Elasticsearch/kibana中体现出来.
+
+#!/bin/bash
+
+python gethn.py
+
+myFile="/cid.txt"
+while : 
+do
+  echo 'checking'
+  sleep 3
+  if [ -f "$myFile" ] && grep -q "docker://" /cid.txt
+  then
+    break
+  else
+    python gethn.py
+  fi
+done
+echo "ok"
+
+STR=$(cat /cid.txt)
+PROJCON=${STR:9:12}
+#mkdir -p /mnt/pods/$HOSTNAME
+mkdir -p /mnt/pods/$PROJCON
+while true; do
+  rsync $LOGOPT $LOG_LOCATION /mnt/pods/$PROJCON
+  T=$(date)
+  echo $T " [log collected]"
+  sleep $INTERVAL
+done
+
+获取UUID可能会有延迟,脚本会不断尝试,直到成功获取UUID并创建目录后,才开始进行日志同步.
+之后会使用rsync将应用原始数据同步到共享存储.rsync可以确保只将变化数据进行同步.同步动作的间隔时间为变量$INTERVAL
+
+##python 脚本获取应用容器的UUID
+
+import os
+import commands
+import json
+
+podname = os.environ.get('HOSTNAME')
+k8s = os.environ.get('KUBERNETES_SERVICE_HOST')
+url = 'https://' + k8s + ':443/api/v1/namespaces/default/pods/' + podname
+json_string = commands.getoutput("curl -k -s '%s'" % url)
+jsload = json.loads(json_string)
+for i in range(len(jsload['status']['containerStatuses'])):
+  if jsload['status']['containerStatuses'][i]['name'] != 'logcollector':
+    cname = jsload['status']['containerStatuses'][i]['name']
+    cid = jsload['status']['containerStatuses'][i]['containerID']
+print('containerName: %s containerID: %s' % (cname,cid))
+commands.getoutput("echo '%s' > /cid.txt" % cid)
